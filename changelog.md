@@ -1,0 +1,89 @@
+# 1.4.0
+
+- **Bug fix**: Fast click fix — when "Use player clicks" is enabled, rapidly clicking
+  in spider and other non-flying gamemodes no longer silently drops taps. Root cause:
+  `m_stateRingJump` is transient and can be cleared before `update()` runs; the fix
+  reads the trail queue (already populated by the `updateJump` hook) to detect taps
+  that completed between frames. Togglable via the new "Fast click fix" setting.
+- **Bug fix**: Fixed a per-frame memory leak — `PlayerData` is now stack-allocated
+  instead of heap-allocated with no corresponding `delete`.
+- **New setting**: "Blocks" toggle — disable block-type objects (platforms, landing
+  blocks) so the generator produces ring / pad / portal-only gameplay.
+- **New setting**: "Spawn chance" (0–100%) — probability that an object actually
+  spawns at each placement opportunity. 100 % is identical to previous behaviour;
+  lower values create sparser layouts.
+
+
+# 1.3.0
+
+- Added a toggle for every object
+- Added the option to disable the spike boundary entirely
+- Added a failsafe so the player doesn't die by jumping into the floor in cube/robot with 'use player clicks' enabled
+- Fixed a bug where the layout would not stop generating on Mac
+
+
+# 1.2.2
+
+- Fixed jump indicators not being placed (again)
+- Fixed a bug where the player would hit black and spider rings late in robot
+- Fixed a bug where objects would not spawn when clicking with 'use player clicks' enabled
+- Fixed spider rings creating impossible sections when flying with 'use player clicks' enabled
+- Tweaked spike boundary generation:
+    - A spike margin of 0 now accurately reflects the tightest possible boundary
+    - Default spike margin set to 50
+
+
+# 1.2.1
+
+- Fixed missing jump indicators in cube/ball/robot/spider
+- Fixed orb spam when holding with 'use player clicks' enabled
+- Maybe fixed bad_alloc crash
+- Tweaked spike boundary generation:
+    - No upper spike boundary in cube/robot
+    - Places fewer spikes in spike columns
+    - Prevents the player from escaping the spike boundary with spider objects
+
+
+# 1.2.0
+
+- Improved ship and wave gameplay
+- Added setting for spike margin
+- Added settings for jump pad and ring generation
+- Added experimental gameplay objects
+- Fixed crash when placing jump indicators in cube/ball/robot/spider
+
+
+# 1.1.0
+
+- Added more settings
+- Implement Geode settings menu which saves across sessions
+- Updated button sprites
+- Enabled editor preview when placing speed portals
+- Fixed object spam when using a song offset
+
+
+# 1.0.4
+
+- Fixed an issue where too many objects would be placed at >60 FPS
+- The war on crashes continues
+
+
+# 1.0.3
+
+- Maybe fixed random crashes
+- Fixed some logic issues causing the player to die during generation
+
+
+# 1.0.2
+
+- Fixed display issue with BPM
+
+
+# 1.0.1
+
+- Tweaks to conform to Geode standards
+
+
+# 1.0.0
+
+- Initial release
