@@ -1,7 +1,12 @@
 # Changelog
 
 ## v1.5.0
-- **Weights section**: Added spawn rate multipliers for blocks, pads, rings, and portals. Configurable beat/half-beat placement chances and initial tap balance.
+- **Weights section**: Added spawn rate multipliers for blocks, pads, rings, and portals, each with a global weight plus subcategories that stack multiplicatively:
+  - Blocks: Jump, Fall, Platform, Spider, Breakable
+  - Pads: Spider
+  - Rings: Spider, Dash, Black
+  - Portals: Gravity, Size, Speed, Gamemode
+  - Configurable beat/half-beat placement chances and initial tap balance.
 - **BPM limit removed**: BPM setting no longer has an upper cap (minimum remains 0.01).
 - **Developer features**:
   - `[DEV] Verbose logging` — logs every fish placement with name, ID, position, and tap to the Geode console.

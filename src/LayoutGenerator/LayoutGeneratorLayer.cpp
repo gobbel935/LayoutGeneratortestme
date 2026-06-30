@@ -551,11 +551,26 @@ const PoolObject *LayoutGeneratorLayer::fishLegally(PlayerData *pd, float dt, in
     auto mod = Mod::get();
     auto objectWhitelist = mod->getSettingValue<std::unordered_set<int>>("objects");
 
-    // read spawn weight multipliers
+    // read spawn weight multipliers (global, per-category)
     const float wBlocks  = mod->getSettingValue<float>("weight-blocks");
     const float wPads    = mod->getSettingValue<float>("weight-pads");
     const float wRings   = mod->getSettingValue<float>("weight-rings");
     const float wPortals = mod->getSettingValue<float>("weight-portals");
+
+    // read spawn weight multipliers (subcategories — stack multiplicatively with the global weight above)
+    const float wBlocksJump      = mod->getSettingValue<float>("weight-blocks-jump");
+    const float wBlocksFall      = mod->getSettingValue<float>("weight-blocks-fall");
+    const float wBlocksPlatform  = mod->getSettingValue<float>("weight-blocks-platform");
+    const float wBlocksSpider    = mod->getSettingValue<float>("weight-blocks-spider");
+    const float wBlocksBreakable = mod->getSettingValue<float>("weight-blocks-breakable");
+    const float wPadsSpider      = mod->getSettingValue<float>("weight-pads-spider");
+    const float wRingsSpider     = mod->getSettingValue<float>("weight-rings-spider");
+    const float wRingsDash       = mod->getSettingValue<float>("weight-rings-dash");
+    const float wRingsBlack      = mod->getSettingValue<float>("weight-rings-black");
+    const float wPortalsGravity  = mod->getSettingValue<float>("weight-portals-gravity");
+    const float wPortalsSize     = mod->getSettingValue<float>("weight-portals-size");
+    const float wPortalsSpeed    = mod->getSettingValue<float>("weight-portals-speed");
+    const float wPortalsGamemode = mod->getSettingValue<float>("weight-portals-gamemode");
 
     const bool disableDedup       = mod->getSettingValue<bool>("dev-disable-dedup");
     const bool disableTrailCheck  = mod->getSettingValue<bool>("dev-disable-trail-check");
@@ -680,15 +695,53 @@ const PoolObject *LayoutGeneratorLayer::fishLegally(PlayerData *pd, float dt, in
                 }
             }
 
-            // apply user-defined spawn weight multipliers
+            // apply user-defined spawn weight multipliers (global category weight * matching subcategory weight)
             if (fish->tags & PoolTag::PORTAL)
+            {
                 weight *= wPortals;
+                if (fish->tags & PoolTag::GRAVITY)
+                    weight *= wPortalsGravity;
+                else if (fish->tags & PoolTag::SIZE_)
+                    weight *= wPortalsSize;
+                else if (fish->tags & PoolTag::SPEED)
+                    weight *= wPortalsSpeed;
+                else if (fish->tags & PoolTag::GAMEMODE)
+                    weight *= wPortalsGamemode;
+            }
             else if (fish->tags & PoolTag::RING)
+            {
                 weight *= wRings;
+                if (fish->tags & PoolTag::SPIDER)
+                    weight *= wRingsSpider;
+                // dash rings carry neither JUMP nor FALL tags
+                else if (!(fish->tags & PoolTag::JUMP) && !(fish->tags & PoolTag::FALL))
+                    weight *= wRingsDash;
+                // black orbs are the only non-spider ring with FALL but no GRAVITY
+                else if (fish->tags & PoolTag::FALL && !(fish->tags & PoolTag::GRAVITY))
+                    weight *= wRingsBlack;
+            }
             else if (fish->tags & PoolTag::PAD)
+            {
                 weight *= wPads;
+                if (fish->tags & PoolTag::SPIDER)
+                    weight *= wPadsSpider;
+            }
             else if (fish->tags & PoolTag::BLOCK)
+            {
                 weight *= wBlocks;
+                if (fish->tags & PoolTag::SPIDER)
+                    weight *= wBlocksSpider;
+                else if (fish->tags & PoolTag::JUMP)
+                    weight *= wBlocksJump;
+                else if (fish->tags & PoolTag::FALL)
+                    weight *= wBlocksFall;
+                else
+                    weight *= wBlocksPlatform;
+            }
+            else if (fish->tags & PoolTag::BREAKABLE_BLOCK)
+            {
+                weight *= wBlocks * wBlocksBreakable;
+            }
 
             return weight;
         });

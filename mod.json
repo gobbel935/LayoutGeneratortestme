@@ -140,7 +140,76 @@
 		},
 		"weight-blocks": {
 			"name": "Block weight",
-			"description": "Spawn rate multiplier for blocks and platforms.",
+			"description": "Global spawn rate multiplier for ALL blocks and platforms (stacks with subcategories below).",
+			"type": "float",
+			"default": 1.0,
+			"min": 0.0,
+			"max": 10.0,
+			"control": {
+				"arrows": true,
+				"arrow-step": 0.25,
+				"slider": true
+			}
+		},
+		"subtitle-weights-blocks": {
+			"name": "Block subcategories",
+			"type": "title"
+		},
+		"weight-blocks-jump": {
+			"name": "Jump block weight",
+			"description": "Multiplier for blocks that launch the player upward (stacks with global block weight).",
+			"type": "float",
+			"default": 1.0,
+			"min": 0.0,
+			"max": 10.0,
+			"control": {
+				"arrows": true,
+				"arrow-step": 0.25,
+				"slider": true
+			}
+		},
+		"weight-blocks-fall": {
+			"name": "Fall block weight",
+			"description": "Multiplier for blocks that drop the player downward (stacks with global block weight).",
+			"type": "float",
+			"default": 1.0,
+			"min": 0.0,
+			"max": 10.0,
+			"control": {
+				"arrows": true,
+				"arrow-step": 0.25,
+				"slider": true
+			}
+		},
+		"weight-blocks-platform": {
+			"name": "Platform block weight",
+			"description": "Multiplier for neutral platform blocks that don't jump or fall (stacks with global block weight).",
+			"type": "float",
+			"default": 1.0,
+			"min": 0.0,
+			"max": 10.0,
+			"control": {
+				"arrows": true,
+				"arrow-step": 0.25,
+				"slider": true
+			}
+		},
+		"weight-blocks-spider": {
+			"name": "Spider block weight",
+			"description": "Multiplier for spider-gamemode-only blocks (stacks with global block weight).",
+			"type": "float",
+			"default": 1.0,
+			"min": 0.0,
+			"max": 10.0,
+			"control": {
+				"arrows": true,
+				"arrow-step": 0.25,
+				"slider": true
+			}
+		},
+		"weight-blocks-breakable": {
+			"name": "Breakable block weight",
+			"description": "Multiplier for experimental breakable blocks (stacks with global block weight).",
 			"type": "float",
 			"default": 1.0,
 			"min": 0.0,
@@ -153,7 +222,24 @@
 		},
 		"weight-pads": {
 			"name": "Pad weight",
-			"description": "Spawn rate multiplier for pads.",
+			"description": "Global spawn rate multiplier for ALL pads (stacks with subcategories below).",
+			"type": "float",
+			"default": 1.0,
+			"min": 0.0,
+			"max": 10.0,
+			"control": {
+				"arrows": true,
+				"arrow-step": 0.25,
+				"slider": true
+			}
+		},
+		"subtitle-weights-pads": {
+			"name": "Pad subcategories",
+			"type": "title"
+		},
+		"weight-pads-spider": {
+			"name": "Spider pad weight",
+			"description": "Multiplier for spider-gamemode-only pads (stacks with global pad weight).",
 			"type": "float",
 			"default": 1.0,
 			"min": 0.0,
@@ -166,7 +252,50 @@
 		},
 		"weight-rings": {
 			"name": "Ring weight",
-			"description": "Spawn rate multiplier for orbs/rings.",
+			"description": "Global spawn rate multiplier for ALL orbs/rings (stacks with subcategories below).",
+			"type": "float",
+			"default": 1.0,
+			"min": 0.0,
+			"max": 10.0,
+			"control": {
+				"arrows": true,
+				"arrow-step": 0.25,
+				"slider": true
+			}
+		},
+		"subtitle-weights-rings": {
+			"name": "Ring subcategories",
+			"type": "title"
+		},
+		"weight-rings-spider": {
+			"name": "Spider ring weight",
+			"description": "Multiplier for spider-gamemode-only rings (stacks with global ring weight).",
+			"type": "float",
+			"default": 1.0,
+			"min": 0.0,
+			"max": 10.0,
+			"control": {
+				"arrows": true,
+				"arrow-step": 0.25,
+				"slider": true
+			}
+		},
+		"weight-rings-dash": {
+			"name": "Dash ring weight",
+			"description": "Multiplier for green and pink dash orbs (stacks with global ring weight).",
+			"type": "float",
+			"default": 1.0,
+			"min": 0.0,
+			"max": 10.0,
+			"control": {
+				"arrows": true,
+				"arrow-step": 0.25,
+				"slider": true
+			}
+		},
+		"weight-rings-black": {
+			"name": "Black ring weight",
+			"description": "Multiplier for black orbs (stacks with global ring weight).",
 			"type": "float",
 			"default": 1.0,
 			"min": 0.0,
@@ -179,7 +308,63 @@
 		},
 		"weight-portals": {
 			"name": "Portal weight",
-			"description": "Spawn rate multiplier for portals (gamemode, speed, size).",
+			"description": "Global spawn rate multiplier for ALL portals (stacks with subcategories below).",
+			"type": "float",
+			"default": 1.0,
+			"min": 0.0,
+			"max": 10.0,
+			"control": {
+				"arrows": true,
+				"arrow-step": 0.25,
+				"slider": true
+			}
+		},
+		"subtitle-weights-portals": {
+			"name": "Portal subcategories",
+			"type": "title"
+		},
+		"weight-portals-gravity": {
+			"name": "Gravity portal weight",
+			"description": "Multiplier for gravity-flipping portals (stacks with global portal weight).",
+			"type": "float",
+			"default": 1.0,
+			"min": 0.0,
+			"max": 10.0,
+			"control": {
+				"arrows": true,
+				"arrow-step": 0.25,
+				"slider": true
+			}
+		},
+		"weight-portals-size": {
+			"name": "Size portal weight",
+			"description": "Multiplier for mini/normal size portals (stacks with global portal weight).",
+			"type": "float",
+			"default": 1.0,
+			"min": 0.0,
+			"max": 10.0,
+			"control": {
+				"arrows": true,
+				"arrow-step": 0.25,
+				"slider": true
+			}
+		},
+		"weight-portals-speed": {
+			"name": "Speed portal weight",
+			"description": "Multiplier for speed-changing portals (stacks with global portal weight).",
+			"type": "float",
+			"default": 1.0,
+			"min": 0.0,
+			"max": 10.0,
+			"control": {
+				"arrows": true,
+				"arrow-step": 0.25,
+				"slider": true
+			}
+		},
+		"weight-portals-gamemode": {
+			"name": "Gamemode portal weight",
+			"description": "Multiplier for gamemode-changing portals (stacks with global portal weight).",
 			"type": "float",
 			"default": 1.0,
 			"min": 0.0,
