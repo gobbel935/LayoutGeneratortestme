@@ -6,17 +6,6 @@
 #include "../PlayerObject.cpp"
 #include "../Settings/ObjectSettings.hpp"
 
-namespace
-{
-    float getPlacementIntervalSeconds()
-    {
-        auto mod = Mod::get();
-        if (mod->getSettingValue<bool>("constant-cps"))
-            return 1.f / std::max(0.01f, mod->getSettingValue<float>("cps"));
-        return 60.f / std::max(0.01f, mod->getSettingValue<float>("bpm"));
-    }
-}
-
 LayoutGeneratorLayer *LayoutGeneratorLayer::create()
 {
     auto ret = new LayoutGeneratorLayer();
@@ -49,7 +38,8 @@ void LayoutGeneratorLayer::reset()
     m_boundsFloor = 90.f;
     m_canPlaceNextFrame = true;
     m_elapsedTime = LevelEditorLayer::get()->m_levelSettings->m_songOffset + .133f;
-    m_halfBeatCount = (int)(m_elapsedTime / getPlacementIntervalSeconds() * 2.f);
+    m_fishId = 0; // FIX: reset fish ID counter on each build
+    m_halfBeatCount = (int)(m_elapsedTime / (60.f / mod->getSettingValue<float>("bpm")) * 2.f);
     m_hasTappedThisGamemode = false;
     m_isClickingLastFrame = false;
     m_lastPlacedFish = nullptr;
@@ -59,10 +49,13 @@ void LayoutGeneratorLayer::reset()
     m_lastSpikeBottomPos = CCPoint{};
     m_lastSpikeTopPos = CCPoint{};
     m_placeAgainTimer = -1;
+    m_playerPosPauseCheck = CCPoint{};
     m_playerTrail.clear();
     m_shouldTap = PoolTap::NO;
     m_shouldTapTimer = 0;
-    m_tapBalance = 3.f;
+    // use configurable initial tap balance
+    m_tapBalance = mod->getSettingValue<float>("weight-tap-balance-init");
+    m_boundsDebugCounter = 0;
 }
 
 void LayoutGeneratorLayer::buildStart()
@@ -87,44 +80,22 @@ void LayoutGeneratorLayer::update(float dt)
 
     auto mod = Mod::get();
     auto editor = LevelEditorLayer::get();
-
-    // FIX: stack-allocate PlayerData instead of heap to avoid a per-frame
-    // memory leak (original code: auto pd = new PlayerData(); — never deleted).
-    PlayerData pdStorage;
-    pdStorage.setPlayer(editor->m_player1);
-    if (!pdStorage.player)
+    auto pd = new PlayerData();
+    pd->setPlayer(editor->m_player1);
+    if (!pd->player)
     {
         log::error("Player is null, aborting!");
         buildStop();
         return;
     }
-    pdStorage.velScaled = CCPoint{pdStorage.velUnscaled.x * 60.f * dt,
-                                   pdStorage.velUnscaled.y * 60.f * dt};
-    auto pd = &pdStorage;
+    pd->velScaled = CCPoint{pd->velUnscaled.x * 60.f * dt, pd->velUnscaled.y * 60.f * dt};
 
     // paused
-    if (!m_playerTrail.empty() && m_playerTrail.back().pos == pd->pos)
+    if (m_playerPosPauseCheck == pd->pos)
         return;
+    m_playerPosPauseCheck = pd->pos;
 
-    // -----------------------------------------------------------------------
-    // BUG FIX — fast-click detection via trail queue
-    //
-    // Root cause: for NOT_FLYING gamemodes (cube/ball/robot/spider) with
-    // "use-player-clicks" on, shouldPlace is gated on m_stateRingJump being
-    // true at the moment update() runs.  m_stateRingJump is transient — it can
-    // be set and cleared entirely inside a single pushButton() → updateJump()
-    // call, BEFORE this update() frame executes.  Fast clicks therefore produce
-    // no output because m_stateRingJump is already false (and sometimes
-    // m_jumpBuffered / isClicking() is also false) by the time we get here.
-    //
-    // The MyPlayerObject::updateJump hook already queues a trail entry with
-    // makeJumpIndicator=true whenever a tap is detected.  We read that queue
-    // below and raise jumpDetectedInTrail as a reliable "a tap happened since
-    // the last frame" signal, independent of current m_stateRingJump state.
-    // -----------------------------------------------------------------------
-    bool jumpDetectedInTrail = false;
-
-    // trail processing
+    // trail
     for (auto &trail : pd->player->m_fields->m_queuedTrail)
     {
         if (trail.pos.x > pd->pos.x)
@@ -137,15 +108,9 @@ void LayoutGeneratorLayer::update(float dt)
 
         m_playerTrail.push_back(trail);
 
-        // fast-click fix: record any jump event captured since the last update
-        if (trail.makeJumpIndicator)
-            jumpDetectedInTrail = true;
-
-        // debug trail
         if (mod->getSettingValue<bool>("debug-trail"))
             placeDebugTrailClicking(trail.pos, trail.isClicking);
 
-        // jump indicators v3
         if (mod->getSettingValue<bool>("jump-indicators") && trail.makeJumpIndicator)
             placeJumpIndicator(trail.pos, trail.state);
     }
@@ -153,14 +118,25 @@ void LayoutGeneratorLayer::update(float dt)
 
     fillSpiderTrail(pd->pos);
 
-    // player isn't ready yet
     if (m_playerTrail.empty())
         return;
+
+    // dev: bounds debug markers
+    if (mod->getSettingValue<bool>("dev-bounds-debug"))
+    {
+        m_boundsDebugCounter++;
+        if (m_boundsDebugCounter >= 10)
+        {
+            m_boundsDebugCounter = 0;
+            placeDebugBoundsMarker(CCPoint{pd->pos.x, m_boundsFloor}, false);
+            placeDebugBoundsMarker(CCPoint{pd->pos.x, m_boundsCeil}, true);
+        }
+    }
 
     // update gamemode bounds
     if (pd->gamemode != m_lastPlayerGamemode)
     {
-        if (pd->gamemode & PoolState::NO_BOUNDS)
+        if (pd->gamemode & PoolState::NO_BOUNDS || pd->isCameraFree())
         {
             m_boundsFloor = 90.f;
             m_boundsCeil = 1300.f;
@@ -181,8 +157,15 @@ void LayoutGeneratorLayer::update(float dt)
         m_hasTappedThisGamemode = false;
     }
 
+    // dev: lock tap balance
+    if (mod->getSettingValue<bool>("dev-tap-balance-lock"))
+        m_tapBalance = mod->getSettingValue<float>("dev-tap-balance-locked");
+    // FIX: clamp tap balance to prevent extreme runaway values
+    else
+        m_tapBalance = std::clamp(m_tapBalance, -20.f, 20.f);
+
     // place object on beat
-    float spb = getPlacementIntervalSeconds();
+    float spb = 60.f / mod->getSettingValue<float>("bpm");
     bool usePlayerClicks = mod->getSettingValue<bool>("use-player-clicks");
     bool useRandomClicks = !usePlayerClicks;
     bool onBeat = false;
@@ -199,44 +182,26 @@ void LayoutGeneratorLayer::update(float dt)
     int requireTap = 0;
     if (m_placeAgainTimer >= 0)
         m_placeAgainTimer--;
-
     if (usePlayerClicks)
     {
-        const bool fastClickFix = mod->getSettingValue<bool>("fast-click-fix");
-
-        // A tap was fully processed before this update() frame ran (fast-click
-        // path).  Only meaningful for NOT_FLYING gamemodes where m_stateRingJump
-        // is the normal signal — flying gamemodes use isClicking() directly.
-        const bool fastTapDetected =
-            fastClickFix &&
-            jumpDetectedInTrail &&
-            (pd->state & PoolState::NOT_FLYING) &&
-            !pd->player->m_isDashing;
-
-        if ((pd->isClicking() || fastTapDetected) && !pd->player->m_isDashing)
+        if (pd->isClicking() && !pd->player->m_isDashing)
         {
             requireTap |= PoolTap::TAP | PoolTap::HOLD;
-
             if (pd->state & PoolState::NOT_FLYING)
             {
-                // Original: only m_stateRingJump.
-                // Fix: also accept a tap confirmed from the trail queue.
-                if (pd->player->m_stateRingJump || fastTapDetected)
+                if (pd->player->m_stateRingJump)
                     shouldPlace = true;
                 else
                     excludeTags |= PoolTag::RING_BUFFERED;
             }
             else
             {
-                // Flying: trigger on the first frame the button goes down.
-                // Fast-click fix is NOT_FLYING only, so check isClicking() here.
-                if (pd->isClicking() && !m_isClickingLastFrame)
+                if (!m_isClickingLastFrame)
                     shouldPlace = true;
                 else
                     excludeTags |= PoolTag::RING;
             }
 
-            // stop placing block platform
             if (m_lastPlacedFish && m_lastPlacedFish->keepActive)
                 m_lastPlacedFish = nullptr;
         }
@@ -246,6 +211,10 @@ void LayoutGeneratorLayer::update(float dt)
         }
     }
 
+    // read user-configurable beat/halfbeat chances
+    const float beatChance = mod->getSettingValue<float>("weight-beat-chance");
+    const float halfBeatChance = mod->getSettingValue<float>("weight-halfbeat-chance");
+
     if (shouldPlace)
         ;
     else if (m_placeAgainTimer == 0)
@@ -254,48 +223,47 @@ void LayoutGeneratorLayer::update(float dt)
         if (useRandomClicks && m_lastPlacedFish && m_lastPlacedFish->tags & PoolTag::SPIDER)
             requireTap |= PoolTap::NO | PoolTap::ANY;
     }
+    // avoid reaching terminal velocity (-15.f)
     else if (pd->velUnscaled.y * pd->getSign() < -10.f &&
              pd->state & (PoolState::NO_BOUNDS | PoolState::GAMEMODE_BALL) && onHalfBeat)
     {
         shouldPlace = true;
         excludeTags |= PoolTag::FALL;
     }
-    else if (utils::random::chance(15.0 / 16.0) && onBeat)
+    // beat
+    else if (utils::random::chance(beatChance) && onBeat)
     {
         shouldPlace = true;
-        if (useRandomClicks && utils::random::chance(0.5))
+        if (useRandomClicks && !(pd->state & PoolState::HOLD_FLYING) && utils::random::chance(0.5))
             requireTap |= PoolTap::TAP_OR_HOLD;
     }
-    else if ((pd->gamemode & PoolState::FLYING || utils::random::chance(3.0 / 4.0)) && onHalfBeat)
+    // half beat
+    else if ((pd->gamemode & PoolState::FLYING || utils::random::chance(halfBeatChance)) && onHalfBeat)
     {
         shouldPlace = true;
     }
 
-    // prevent placing two objects in two sequential frames
-    if (!m_canPlaceNextFrame)
-        shouldPlace = false;
-
-    // -----------------------------------------------------------------------
-    // FEATURE — spawn chance
-    // After all other placement logic, apply a probabilistic filter.
-    // At 100 % (default) behaviour is identical to before.
-    // Lower values skip otherwise-valid placement opportunities, producing
-    // sparser layouts.
-    // -----------------------------------------------------------------------
-    if (shouldPlace)
+    // dev: always place — bypass gating and canPlaceNextFrame
+    if (mod->getSettingValue<bool>("dev-always-place"))
     {
-        const float spawnChance = mod->getSettingValue<float>("spawn-chance") / 100.0f;
-        if (spawnChance < 1.0f && !utils::random::chance(static_cast<double>(spawnChance)))
-            shouldPlace = false;
+        shouldPlace = true;
     }
+    else if (!m_canPlaceNextFrame)
+    {
+        shouldPlace = false;
+    }
+
+    // dev: freeze generation — record trail but don't place
+    if (mod->getSettingValue<bool>("dev-freeze-generation"))
+        shouldPlace = false;
 
     // continue placing a block platform
     if (m_lastPlacedFish && m_lastPlacedFish->keepActive)
         placeFish(pd, m_lastPlacedFish, !shouldPlace, true);
 
-    // cube/robot failsafe when jumping into the floor in reverse gravity
+    // failsafe when jumping into the floor in reverse gravity
     if (pd->isUpsideDown() &&
-        pd->state & PoolState::NO_BOUNDS &&
+        (pd->state & PoolState::NO_BOUNDS || pd->isCameraFree()) &&
         pd->state & PoolState::RISING &&
         pd->pos.y < m_boundsFloor + 30.f)
     {
@@ -308,22 +276,11 @@ void LayoutGeneratorLayer::update(float dt)
     const PoolObject *fish = nullptr;
     if (shouldPlace)
     {
-        // only change gamemode, speed, and size on beat
         if (!onBeat)
             excludeTags |= PoolTag::GAMEMODE | PoolTag::SPEED | PoolTag::SIZE_;
 
-        // experimental gameplay
         if (!mod->getSettingValue<bool>("experimental-gameplay"))
             excludeTags |= PoolTag::EXPERIMENTAL;
-
-        // -----------------------------------------------------------------------
-        // FEATURE — blocks enabled toggle
-        // When disabled, all BLOCK-tagged objects (ground jumps, landing blocks,
-        // platforms) are excluded so the generator produces ring / pad / portal
-        // only gameplay.
-        // -----------------------------------------------------------------------
-        if (!mod->getSettingValue<bool>("blocks-enabled"))
-            excludeTags |= PoolTag::BLOCK;
 
         fish = fishLegally(pd, dt, excludeTags, requireTap);
         if (fish)
@@ -333,11 +290,13 @@ void LayoutGeneratorLayer::update(float dt)
             m_shouldTapTimer = 0;
 
             if (fish->tap != PoolTap::ANY)
+            {
                 m_shouldTap = fish->tap;
+            }
 
             if (fish->tap == PoolTap::NO)
             {
-                m_tapBalance -= pd->state & PoolState::HOLD_FLYING ? 1.f : 2.f;
+                m_tapBalance -= pd->state & PoolState::HOLD_FLYING ? .5f : 2.f;
             }
             else if (fish->tap == PoolTap::TAP)
             {
@@ -371,14 +330,16 @@ void LayoutGeneratorLayer::update(float dt)
                         CCPoint pos = pd->pos;
                         pos.y -= pd->getRectSize().height / 2.f * pd->getSign();
                         pos.y -= 15.f * pd->getSign();
-                        if (!isOutOfBounds(pos.y, 30.f, pd->state & PoolState::HAS_BOUNDS))
+                        if (!isOutOfBounds(pos.y, 30.f, pd))
                             editor->createObject(ObjectId::BLOCK, pos, true);
                     }
                 }
             }
 
             if (fish->tags & PoolTag::SPIDER && utils::random::chance(0.5))
+            {
                 m_placeAgainTimer = 2;
+            }
 
             if (useRandomClicks && fish->tap & PoolTap::TAP_OR_HOLD && pd->isClicking())
             {
@@ -415,7 +376,9 @@ void LayoutGeneratorLayer::update(float dt)
         const CCSize spikeSize{8.f + spikeMargin / 2.f, 14.f};
 
         const float spikeScanRight = pd->pos.x - (30.f - playerSize.width) / 2.f;
+
         const float spikeX = spikeScanRight - (playerSize.width + spikeSize.width) / 2.f;
+
         const float spikeScanLeft = spikeX - (playerSize.width + spikeSize.width) / 2.f;
 
         bool spikeBottom = false;
@@ -438,12 +401,12 @@ void LayoutGeneratorLayer::update(float dt)
 
             if (
                 trail.state & (PoolState::AIRBORNE | PoolState::HAS_BOUNDS) ||
-                trail.state & PoolState::GRAVITY_REVERSE && trail.velUnscaled.y >= 15.f ||
+                (trail.isUpsideDown() && trail.velUnscaled.y >= 15.f) ||
                 (trail.fish && trail.fish->tags & PoolTag::SPIDER))
                 spikeBottom = true;
             if (
                 trail.state & (PoolState::AIRBORNE | PoolState::HAS_BOUNDS) ||
-                trail.state & PoolState::GRAVITY_NORMAL && trail.velUnscaled.y <= -15.f ||
+                (!trail.isUpsideDown() && trail.velUnscaled.y <= -15.f) ||
                 (trail.fish && trail.fish->tags & PoolTag::SPIDER))
                 spikeTop = true;
 
@@ -484,11 +447,11 @@ void LayoutGeneratorLayer::update(float dt)
             float jumpShrink = std::min(midMaxShrink, midTrail.state & PoolState::SIZE_MINI ? 30.f : 15.f);
             if (leftTrail.pos.y < midTrail.pos.y - 1.f &&
                 pd->pos.y < midTrail.pos.y - 1.f &&
-                midTrail.state & PoolState::GRAVITY_NORMAL)
+                !midTrail.isUpsideDown())
                 yMin += jumpShrink;
             if (leftTrail.pos.y > midTrail.pos.y + 1.f &&
                 pd->pos.y > midTrail.pos.y + 1.f &&
-                midTrail.state & PoolState::GRAVITY_REVERSE)
+                midTrail.isUpsideDown())
                 yMax -= jumpShrink;
         }
 
@@ -500,7 +463,10 @@ void LayoutGeneratorLayer::update(float dt)
             midTrail,
             spikeMargin <= 0.f
                 ? 0.f
-                : (closeTheSpiderGap ? 6.f : playerSize.width) + 6.f - pd->velScaled.x);
+                : (closeTheSpiderGap
+                       ? 6.f
+                       : playerSize.width) +
+                      6.f - pd->velScaled.x);
     }
 
     // jumping
@@ -523,7 +489,7 @@ void LayoutGeneratorLayer::update(float dt)
         }
         else if (m_shouldTap == PoolTap::TOWARDS_CENTER)
         {
-            auto mid = (m_boundsFloor + m_boundsCeil) / 2.f;
+            float mid = (m_boundsFloor + m_boundsCeil) / 2.f;
             if (pd->state & PoolState::GAMEMODE_SHIP)
                 mid -= pd->velScaled.y * 10.f;
             else if (pd->state & PoolState::GAMEMODE_WAVE)
@@ -531,7 +497,7 @@ void LayoutGeneratorLayer::update(float dt)
 
             bool push = pd->pos.y * pd->getSign() < mid * pd->getSign();
 
-            auto dist = abs(pd->pos.y - mid);
+            float dist = abs(pd->pos.y - mid);
             if (dist < 60 && utils::random::chance((1 - dist / 60.f) * .5f))
                 push = !push;
 
@@ -585,6 +551,17 @@ const PoolObject *LayoutGeneratorLayer::fishLegally(PlayerData *pd, float dt, in
     auto mod = Mod::get();
     auto objectWhitelist = mod->getSettingValue<std::unordered_set<int>>("objects");
 
+    // read spawn weight multipliers
+    const float wBlocks  = mod->getSettingValue<float>("weight-blocks");
+    const float wPads    = mod->getSettingValue<float>("weight-pads");
+    const float wRings   = mod->getSettingValue<float>("weight-rings");
+    const float wPortals = mod->getSettingValue<float>("weight-portals");
+
+    const bool disableDedup       = mod->getSettingValue<bool>("dev-disable-dedup");
+    const bool disableTrailCheck  = mod->getSettingValue<bool>("dev-disable-trail-check");
+    const bool verboseLog         = mod->getSettingValue<bool>("dev-verbose-log");
+    const std::string forceFish   = mod->getSettingValue<std::string>("dev-force-fish");
+
     const int blindScanBehind = (int)(.3f / dt);
     bool isBlind = false;
     if (!mod->getSettingValue<bool>("use-player-clicks") &&
@@ -592,45 +569,58 @@ const PoolObject *LayoutGeneratorLayer::fishLegally(PlayerData *pd, float dt, in
         pd->state & PoolState::NO_BOUNDS)
         isBlind = abs(pd->pos.y - m_playerTrail[m_playerTrail.size() - blindScanBehind].pos.y) > 130.f;
 
-    return GameObjectPool::fish(
-        [&](const PoolObject *fish)
+    const PoolObject *result = GameObjectPool::fish(
+        [&](const PoolObject *fish) -> float
         {
+            // dev: force a specific fish by name — bypasses all other checks
+            if (!forceFish.empty())
+                return fish->name == forceFish ? 1000.f : 0.f;
+
+            // tag blacklist
             if (fish->tags & excludeTags)
                 return 0.f;
 
+            // require tap
             if (requireTap > 0 && !(fish->tap & requireTap))
                 return 0.f;
 
+            // match state
             if (!fish->matchesPlayerState(pd->state))
                 return 0.f;
 
+            // object id whitelist
             if (ObjectSettingsNode::OBJECT_ID_WHITELISTABLE.contains(fish->objectId) &&
                 !objectWhitelist.contains(fish->objectId))
                 return 0.f;
 
+            // blind jumps
             if (isBlind && fish->tap & PoolTap::TAP_OR_HOLD)
                 return 0.f;
 
+            // chaining portal into another portal looks bad
             if (m_placeAgainTimer == 0 && fish->tap == PoolTap::ANY)
                 return 0.f;
 
-            if (pd->state & PoolState::NO_BOUNDS &&
+            // tapping a green orb that results in dying to the floor boundary
+            if ((pd->state & PoolState::NO_BOUNDS || pd->isCameraFree()) &&
                 !pd->isUpsideDown() &&
                 pd->pos.y < m_boundsFloor + 135.f &&
                 fish->tags & PoolTag::FALL &&
                 fish->tags & PoolTag::GRAVITY)
                 return 0.f;
 
+            // changing gamemode when it hasn't tapped yet
             if (!m_hasTappedThisGamemode && fish->tags & PoolTag::GAMEMODE)
                 return 0.f;
 
+            // tap balance
             float weight = 1.f;
             if (m_tapBalance < 0 && fish->tap & (PoolTap::NO | PoolTap::ANY))
                 weight = 1.f / -m_tapBalance;
             if (m_tapBalance > 0 && fish->tap & (PoolTap::TAP_OR_HOLD | PoolTap::RANDOM))
                 weight = 1.f / m_tapBalance;
 
-            if (pd->state & PoolState::NO_BOUNDS)
+            if (pd->state & PoolState::NO_BOUNDS || pd->isCameraFree())
             {
                 if (pd->isUpsideDown())
                 {
@@ -659,11 +649,12 @@ const PoolObject *LayoutGeneratorLayer::fishLegally(PlayerData *pd, float dt, in
             }
             else
             {
-                auto mid = (m_boundsFloor + m_boundsCeil) / 2.f;
+                float mid = (m_boundsFloor + m_boundsCeil) / 2.f;
                 if (pd->state & PoolState::GAMEMODE_SHIP)
                     mid -= pd->velScaled.y * 10.f;
 
-                auto dist = abs(pd->pos.y - mid);
+                float dist = abs(pd->pos.y - mid);
+                float penalty = 1 - dist / (pd->state & (PoolState::GAMEMODE_SHIP | PoolState::GAMEMODE_UFO) ? 30.f : 125.f);
 
                 if (pd->pos.y * pd->getSign() < mid * pd->getSign())
                 {
@@ -671,10 +662,10 @@ const PoolObject *LayoutGeneratorLayer::fishLegally(PlayerData *pd, float dt, in
                     {
                         if ((fish->tags & PoolTag::FALL && !(fish->tags & PoolTag::GRAVITY)) ||
                             (fish->tags & PoolTag::JUMP && fish->tags & PoolTag::GRAVITY))
-                            weight *= 1 - dist / 30.f;
+                            weight *= penalty;
                     }
                     else if (fish->tags & PoolTag::FALL)
-                        weight *= 1 - dist / 125.f;
+                        weight *= penalty;
                 }
                 else
                 {
@@ -682,15 +673,34 @@ const PoolObject *LayoutGeneratorLayer::fishLegally(PlayerData *pd, float dt, in
                     {
                         if ((fish->tags & PoolTag::JUMP && !(fish->tags & PoolTag::GRAVITY)) ||
                             (fish->tags & PoolTag::FALL && fish->tags & PoolTag::GRAVITY))
-                            weight *= 1 - dist / 30.f;
+                            weight *= penalty;
                     }
                     else if (fish->tags & PoolTag::JUMP)
-                        weight *= 1 - dist / 125.f;
+                        weight *= penalty;
                 }
             }
 
+            // apply user-defined spawn weight multipliers
+            if (fish->tags & PoolTag::PORTAL)
+                weight *= wPortals;
+            else if (fish->tags & PoolTag::RING)
+                weight *= wRings;
+            else if (fish->tags & PoolTag::PAD)
+                weight *= wPads;
+            else if (fish->tags & PoolTag::BLOCK)
+                weight *= wBlocks;
+
             return weight;
         });
+
+    // dev: verbose logging
+    if (verboseLog && result)
+    {
+        log::info("[DEV] fish #{}: '{}' | tags={:#x} | tap={} | objectId={}",
+            m_fishId, result->name, result->tags, (int)result->tap, result->objectId);
+    }
+
+    return result;
 }
 
 void LayoutGeneratorLayer::placeFish(PlayerData *pd, const PoolObject *fish, bool dedup, bool useLastY)
@@ -698,6 +708,9 @@ void LayoutGeneratorLayer::placeFish(PlayerData *pd, const PoolObject *fish, boo
     auto mod = Mod::get();
     auto editor = LevelEditorLayer::get();
     auto playerRect = pd->player->getObjectRect();
+
+    const bool disableDedup      = mod->getSettingValue<bool>("dev-disable-dedup");
+    const bool disableTrailCheck = mod->getSettingValue<bool>("dev-disable-trail-check");
 
     auto pos = CCPoint{
         pd->pos.x + pd->velScaled.x,
@@ -737,12 +750,14 @@ void LayoutGeneratorLayer::placeFish(PlayerData *pd, const PoolObject *fish, boo
         if (useLastY)
             pos.y = m_lastPlacedFishPos.y;
 
-        if (isOutOfBounds(pos.y, tempObjRect.size.height, pd->state & PoolState::HAS_BOUNDS))
+        if (isOutOfBounds(pos.y, tempObjRect.size.height, pd))
             shouldPlace = false;
-        else if (dedup && getObjectNearPoint(pos, 24.f, fish->objectId) != nullptr)
+        // FIX: respect dev-disable-dedup flag
+        else if (!disableDedup && dedup && getObjectNearPoint(pos, 24.f, fish->objectId) != nullptr)
             shouldPlace = false;
 
-        if (shouldPlace && !(fish->tags & PoolTag::RING))
+        // FIX: respect dev-disable-trail-check flag
+        if (shouldPlace && !(fish->tags & PoolTag::RING) && !disableTrailCheck)
         {
             tempObjRect.origin += pos;
             if (doesRectInterfereWithTrail(tempObjRect, pd->pos.x, fish->tags & PoolTag::BLOCK, pd->state & PoolState::SIZE_MINI))
@@ -755,48 +770,71 @@ void LayoutGeneratorLayer::placeFish(PlayerData *pd, const PoolObject *fish, boo
         if (shouldPlace)
         {
             primaryObj = editor->createObject(fish->objectId, pos, true);
-            if (pd->isUpsideDown())
+            // FIX: null-check createObject result before using it
+            if (!primaryObj)
             {
-                if (fish->canFlip())
-                    primaryObj->setFlipY(true);
-                primaryObj->setRotation(-fish->rotation);
+                log::warn("{} {} createObject returned null!", m_fishId, fish->name);
+                shouldPlace = false;
             }
             else
-                primaryObj->setRotation(fish->rotation);
-
-            auto primaryObjRect = getObjectRect(primaryObj);
-
-            if (fish->tags & PoolTag::SPIDER)
             {
-                if (fish->rotation == 180.f)
+                if (pd->isUpsideDown())
                 {
-                    primaryObj->setFlipY(!primaryObj->m_isFlipY);
-                    primaryObj->setRotation(0.f);
+                    if (fish->canFlip())
+                        primaryObj->setFlipY(true);
+                    primaryObj->setRotation(-fish->rotation);
                 }
-                primaryObj->customSetup();
-            }
+                else
+                    primaryObj->setRotation(fish->rotation);
 
-            if (auto ringObj = typeinfo_cast<RingObject *>(primaryObj))
-            {
-                if (primaryObjRect.intersectsRect(playerRect))
-                    pd->player->addToTouchedRings(ringObj);
-            }
+                auto primaryObjRect = getObjectRect(primaryObj);
 
-            if (fish->tags & PoolTag::SPEED)
-            {
-                if (auto effectObj = typeinfo_cast<EffectGameObject *>(primaryObj))
+                // spider pad and ring patch
+                if (fish->tags & PoolTag::SPIDER)
                 {
-                    effectObj->m_shouldPreview = true;
-                    editor->tryUpdateSpeedObject(effectObj, false);
+                    if (fish->rotation == 180.f)
+                    {
+                        primaryObj->setFlipY(!primaryObj->m_isFlipY);
+                        primaryObj->setRotation(0.f);
+                    }
+                    primaryObj->customSetup();
                 }
-            }
 
-            if (fish->objectId == ObjectId::GAMEMODE_PORTAL_WAVE ||
-                (pd->state & PoolState::GAMEMODE_WAVE && fish->objectId == ObjectId::BLOCK))
-                placeDBlock(pos);
+                // every ring patch
+                if (auto ringObj = typeinfo_cast<RingObject *>(primaryObj))
+                {
+                    if (primaryObjRect.intersectsRect(playerRect))
+                        pd->player->addToTouchedRings(ringObj);
+                }
+
+                // enable free mode for gamemode portals
+                if (fish->tags & PoolTag::GAMEMODE && mod->getSettingValue<bool>("camera-free-mode"))
+                {
+                    if (auto effectObj = typeinfo_cast<EffectGameObject *>(primaryObj))
+                    {
+                        effectObj->m_cameraIsFreeMode = true;
+                    }
+                }
+
+                // enable preview for speed portals
+                if (fish->tags & PoolTag::SPEED)
+                {
+                    if (auto effectObj = typeinfo_cast<EffectGameObject *>(primaryObj))
+                    {
+                        effectObj->m_shouldPreview = true;
+                        editor->tryUpdateSpeedObject(effectObj, false);
+                    }
+                }
+
+                // place d blocks in wave
+                if (fish->objectId == ObjectId::GAMEMODE_PORTAL_WAVE ||
+                    (pd->state & PoolState::GAMEMODE_WAVE && fish->objectId == ObjectId::BLOCK))
+                    placeDBlock(pos);
+            }
         }
     }
 
+    // place ground below spider taps, pads, and rings
     if (fish->tags & PoolTag::SPIDER &&
         (!mod->getSettingValue<bool>("use-player-clicks") || !(fish->tags & PoolTag::BLOCK)) &&
         shouldPlace)
@@ -806,12 +844,16 @@ void LayoutGeneratorLayer::placeFish(PlayerData *pd, const PoolObject *fish, boo
         if (up)
         {
             yMin = pd->pos.y + (fish->tags & PoolTag::GRAVITY ? 30.f : 60.f);
-            yMax = pd->state & PoolState::HAS_BOUNDS ? m_boundsCeil : std::min(m_boundsCeil, yMin + 150.f);
+            yMax = pd->state & PoolState::HAS_BOUNDS && !pd->isCameraFree()
+                       ? m_boundsCeil
+                       : std::min(m_boundsCeil, yMin + 150.f);
         }
         else
         {
             yMax = pd->pos.y - (fish->tags & PoolTag::GRAVITY ? 30.f : 60.f);
-            yMin = pd->state & PoolState::HAS_BOUNDS ? m_boundsFloor : std::max(m_boundsFloor, yMax - 150.f);
+            yMin = pd->state & PoolState::HAS_BOUNDS && !pd->isCameraFree()
+                       ? m_boundsFloor
+                       : std::max(m_boundsFloor, yMax - 150.f);
         }
         CCPoint pos{pd->pos.x + pd->velScaled.x, utils::random::generate<float>(yMin, yMax)};
         auto tempObj = GameObject::createWithKey(ObjectId::BLOCK);
@@ -826,7 +868,7 @@ void LayoutGeneratorLayer::placeFish(PlayerData *pd, const PoolObject *fish, boo
                 didPlace = true;
                 break;
             }
-            if (pd->state & PoolState::HAS_BOUNDS)
+            if (pd->state & PoolState::HAS_BOUNDS && !pd->isCameraFree())
             {
                 didPlace = false;
                 break;
@@ -837,6 +879,7 @@ void LayoutGeneratorLayer::placeFish(PlayerData *pd, const PoolObject *fish, boo
             placeDBlock(pos);
     }
 
+    // force trigger rings when flying
     if (mod->getSettingValue<bool>("use-player-clicks") &&
         pd->state & PoolState::FLYING &&
         fish->tags & PoolTag::RING_LATE &&
@@ -849,10 +892,15 @@ void LayoutGeneratorLayer::placeFish(PlayerData *pd, const PoolObject *fish, boo
             editor->removeObject(m_lastPlacedJumpIndicator, true);
     }
 
+    // place label
     if (mod->getSettingValue<bool>("debug-trail") && !useLastY)
     {
-        placeLabel(fish->name, CCPoint{pos.x, pos.y - 60.f});
-        placeLabel(std::to_string(m_fishId), CCPoint{pos.x, pos.y - 67.5f});
+        placeLabel(
+            fish->name,
+            CCPoint{pos.x, pos.y - 60.f});
+        placeLabel(
+            std::to_string(m_fishId),
+            CCPoint{pos.x, pos.y - 67.5f});
     }
 
     m_fishId++;
@@ -888,7 +936,8 @@ void LayoutGeneratorLayer::placeDebugTrailClicking(CCPoint pos, bool isClicking)
 {
     auto obj = LevelEditorLayer::get()->createObject(
         isClicking ? ObjectId::TRAIL_INDICATOR_CLICKING : ObjectId::TRAIL_INDICATOR,
-        pos, true);
+        pos,
+        true);
     obj->updateCustomScaleX(0.25);
     obj->updateCustomScaleY(0.25);
     obj->m_editorLayer = 1;
@@ -916,6 +965,7 @@ void LayoutGeneratorLayer::placeJumpIndicator(CCPoint pos, int state)
     }
 
     obj->m_editorLayer = 1;
+
     m_lastPlacedJumpIndicator = obj;
 }
 
@@ -929,14 +979,26 @@ void LayoutGeneratorLayer::placeLabel(std::string text, CCPoint pos)
     textObj->updateTextObject(text, false);
 }
 
+void LayoutGeneratorLayer::placeDebugBoundsMarker(CCPoint pos, bool isTop)
+{
+    auto obj = LevelEditorLayer::get()->createObject(ObjectId::TRAIL_INDICATOR_PLACING, pos, true);
+    obj->updateCustomScaleX(0.5);
+    obj->updateCustomScaleY(0.5);
+    obj->setRotation(isTop ? 90.f : -90.f);
+    obj->m_editorLayer = 2;
+}
+
 void LayoutGeneratorLayer::placeSpikeBoundary(
-    bool bottom, CCPoint bottomPos,
-    bool top,    CCPoint topPos,
+    bool bottom,
+    CCPoint bottomPos,
+    bool top,
+    CCPoint topPos,
     const PlayerTrailData &midTrail,
     float dedupDistance)
 {
     const float verticalFillDist = midTrail.rectSize.height + 11.f;
 
+    // bottom
     if (getObjectNearPoint(bottomPos, dedupDistance, ObjectId::SPIKE) == nullptr)
     {
         if (bottom)
@@ -960,6 +1022,7 @@ void LayoutGeneratorLayer::placeSpikeBoundary(
         m_lastSpikeBottomPos = bottomPos;
     }
 
+    // top
     if (getObjectNearPoint(topPos, dedupDistance, ObjectId::SPIKE) == nullptr)
     {
         if (top)
@@ -986,10 +1049,12 @@ void LayoutGeneratorLayer::placeSpikeBoundary(
 
 void LayoutGeneratorLayer::placeSpikeInBounds(CCPoint pos, const PlayerTrailData &trail, bool flipY)
 {
-    if (!isOutOfBounds(pos.y, 12.f, trail.state & PoolState::HAS_BOUNDS, trail.boundsCeil, trail.boundsFloor))
+    if (!isOutOfBounds(pos.y, 12.f, trail))
     {
         if (auto spike = LevelEditorLayer::get()->createObject(ObjectId::SPIKE, pos, true))
+        {
             spike->setFlipY(flipY);
+        }
     }
 }
 
@@ -1028,6 +1093,7 @@ void LayoutGeneratorLayer::fillSpiderTrail(CCPoint targetPos)
         return;
 
     const float fillDistance = 30.f;
+
     CCPoint pos = m_playerTrail.back().pos;
     while (abs(pos.y - targetPos.y) > fillDistance)
     {
@@ -1053,9 +1119,14 @@ bool LayoutGeneratorLayer::isOutOfBounds(float y, float height, bool hasUpperBou
     return y + height / 2.f <= boundsFloor || (y - height / 2.f >= boundsCeil && hasUpperBound);
 }
 
-bool LayoutGeneratorLayer::isOutOfBounds(float y, float height, bool hasUpperBound)
+bool LayoutGeneratorLayer::isOutOfBounds(float y, float height, PlayerData *pd)
 {
-    return isOutOfBounds(y, height, hasUpperBound, m_boundsCeil, m_boundsFloor);
+    return isOutOfBounds(y, height, pd->state & PoolState::HAS_BOUNDS && !pd->isCameraFree(), m_boundsCeil, m_boundsFloor);
+}
+
+bool LayoutGeneratorLayer::isOutOfBounds(float y, float height, const PlayerTrailData &trail)
+{
+    return isOutOfBounds(y, height, trail.state & PoolState::HAS_BOUNDS && !trail.isCameraFree(), trail.boundsCeil, trail.boundsFloor);
 }
 
 GameObject *LayoutGeneratorLayer::getObjectNearPoint(CCPoint point, float radius, int objectId)
@@ -1084,9 +1155,12 @@ CCRect LayoutGeneratorLayer::getObjectRect(GameObject *obj)
     {
         auto save1 = obj->m_isObjectRectDirty;
         auto save2 = obj->m_boxOffsetCalculated;
+
         auto rect = obj->getObjectRect();
+
         obj->m_isObjectRectDirty = save1;
         obj->m_boxOffsetCalculated = save2;
+
         return rect;
     }
     else

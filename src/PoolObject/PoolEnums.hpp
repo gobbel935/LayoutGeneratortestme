@@ -51,9 +51,9 @@ enum PoolState
 
     GROUNDED = 1 << 0,
     AIRBORNE = 1 << 1,
-    // unused
-    // GROUNDED_FLOOR = 1 << 2,
-    // GROUNDED_CEILING = 1 << 3,
+
+    CAMERA_FREE = 1 << 2,
+    CAMERA_NOT_FREE = 1 << 3,
 
     RISING = 1 << 4,
     PEAKING = 1 << 5,
@@ -120,7 +120,7 @@ enum PoolTap
     HOLD_RANDOM = 1 << 4,    // hold for a random duration (robot)
     ANY = 1 << 5,            // doesn't matter if you tap, the player can't do anything
     RANDOM = 1 << 6,         // mash randomly
-    TOWARDS_CENTER = 1 << 7, // aim for middle of bounds
+    TOWARDS_CENTER = 1 << 7, // aim for middle of bounds by constantly monitoring the player's position
 
     TAP_OR_HOLD = TAP | TAP_DELAYED | HOLD | HOLD_RANDOM,
 };

@@ -47,6 +47,8 @@ void PlayerData::storeState()
 
     state |= isUpsideDown() ? PoolState::GRAVITY_REVERSE : PoolState::GRAVITY_NORMAL;
 
+    state |= isCameraFree() ? PoolState::CAMERA_FREE : PoolState::CAMERA_NOT_FREE;
+
     state |= player->m_vehicleSize < 1.f ? PoolState::SIZE_MINI : PoolState::SIZE_NORMAL;
 
     if (player->m_playerSpeed == 0.7f)
@@ -67,6 +69,13 @@ void PlayerData::storeState()
         state |= player->m_isOnGround ? PoolState::GROUNDED : PoolState::AIRBORNE;
 }
 
+bool PlayerData::isCameraFree() const
+{
+    // see GJBaseGameLayer::updateCameraMode
+    // man i wish this was named
+    return player->m_gameLayer->m_gameState.m_unkBool8;
+}
+
 // m_jumpBuffered seems to be the same as m_holdingButtons[(int)PlayerButton::Jump],
 // but is false after hitting a spider pad/ring
 bool PlayerData::isClicking() const
@@ -85,6 +94,21 @@ CCSize PlayerData::getRectSize() const
 }
 
 int PlayerData::getSign() const
+{
+    return isUpsideDown() ? -1 : 1;
+}
+
+bool PlayerTrailData::isCameraFree() const
+{
+    return state & PoolState::CAMERA_FREE;
+}
+
+bool PlayerTrailData::isUpsideDown() const
+{
+    return state & PoolState::GRAVITY_REVERSE;
+}
+
+int PlayerTrailData::getSign() const
 {
     return isUpsideDown() ? -1 : 1;
 }

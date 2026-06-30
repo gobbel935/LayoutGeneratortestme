@@ -47,6 +47,9 @@ protected:
 
     int m_placeAgainTimer = -1;
 
+    // stores the player position to check if the playtest is paused
+    CCPoint m_playerPosPauseCheck;
+
     std::vector<PlayerTrailData> m_playerTrail;
 
     PoolTap m_shouldTap = PoolTap::NO;
@@ -55,15 +58,16 @@ protected:
 
     float m_tapBalance = 0.f;
 
+    // counter for dev bounds debug markers (placed every N frames)
+    int m_boundsDebugCounter = 0;
+
 protected:
     bool init() override;
 
     void reset();
 
-    // start building
     void buildStart();
 
-    // stop building (via the EditorUI, which later calls playtestStopped)
     void buildStop();
 
     void update(float dt) override;
@@ -84,6 +88,9 @@ protected:
 
     void placeLabel(std::string text, CCPoint pos);
 
+    // places a visible floor/ceiling bounds marker for the dev-bounds-debug setting
+    void placeDebugBoundsMarker(CCPoint pos, bool isTop);
+
     void placeSpikeBoundary(
         bool bottom,
         CCPoint bottomPos,
@@ -100,7 +107,9 @@ protected:
 
     bool isOutOfBounds(float y, float height, bool hasUpperBound, float boundsCeil, float boundsFloor);
 
-    bool isOutOfBounds(float y, float height, bool hasUpperBound);
+    bool isOutOfBounds(float y, float height, PlayerData *pd);
+
+    bool isOutOfBounds(float y, float height, const PlayerTrailData &trail);
 
     GameObject *getObjectNearPoint(CCPoint point, float radius, int objectId = -1);
 

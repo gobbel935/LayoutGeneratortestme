@@ -1,89 +1,45 @@
-# 1.4.0
+# Changelog
 
-- **Bug fix**: Fast click fix — when "Use player clicks" is enabled, rapidly clicking
-  in spider and other non-flying gamemodes no longer silently drops taps. Root cause:
-  `m_stateRingJump` is transient and can be cleared before `update()` runs; the fix
-  reads the trail queue (already populated by the `updateJump` hook) to detect taps
-  that completed between frames. Togglable via the new "Fast click fix" setting.
-- **Bug fix**: Fixed a per-frame memory leak — `PlayerData` is now stack-allocated
-  instead of heap-allocated with no corresponding `delete`.
-- **New setting**: "Blocks" toggle — disable block-type objects (platforms, landing
-  blocks) so the generator produces ring / pad / portal-only gameplay.
-- **New setting**: "Spawn chance" (0–100%) — probability that an object actually
-  spawns at each placement opportunity. 100 % is identical to previous behaviour;
-  lower values create sparser layouts.
+## v1.5.0
+- **Weights section**: Added spawn rate multipliers for blocks, pads, rings, and portals. Configurable beat/half-beat placement chances and initial tap balance.
+- **BPM limit removed**: BPM setting no longer has an upper cap (minimum remains 0.01).
+- **Developer features**:
+  - `[DEV] Verbose logging` — logs every fish placement with name, ID, position, and tap to the Geode console.
+  - `[DEV] Always place` — bypasses beat/half-beat gating and the canPlaceNextFrame guard, placing an object every frame.
+  - `[DEV] Disable deduplication` — skips the proximity check that prevents duplicate objects.
+  - `[DEV] Disable trail interference check` — skips overlap detection against the player's recent trail.
+  - `[DEV] Freeze generation` — pauses object placement while keeping the playtest running; trail is still recorded.
+  - `[DEV] Lock tap balance` — overrides the tap balance with a fixed value every frame.
+  - `[DEV] Force fish by name` — forces a specific fish to always be selected, bypassing all state/tap/tag checks.
+  - `[DEV] Bounds debug markers` — places visible markers at the floor and ceiling bounds every 10 frames.
+- **Fixes**:
+  - Fish ID counter (`m_fishId`) is now reset to 0 on each new build start.
+  - `createObject` return value is now null-checked before use in `placeFish`.
+  - Tap balance is now clamped to `[-20, 20]` to prevent runaway values.
+  - Initial tap balance now reads from the `weight-tap-balance-init` setting instead of being hardcoded to 3.
+  - Beat/half-beat placement chances now read from settings instead of being hardcoded to 15/16 and 3/4.
 
+## v1.4.0
+- Added jump indicator toggle
+- Added experimental gameplay toggle
+- Added free camera mode toggle
+- Spider trail fix
+- Various bug fixes
 
-# 1.3.0
+## v1.3.0
+- Added spike boundary system (v2)
+- Added debug trail
+- Improved tap balance system
 
-- Added a toggle for every object
-- Added the option to disable the spike boundary entirely
-- Added a failsafe so the player doesn't die by jumping into the floor in cube/robot with 'use player clicks' enabled
-- Fixed a bug where the layout would not stop generating on Mac
+## v1.2.0
+- Added use-player-clicks mode
+- Added object whitelist setting
+- Improved gamemode bounds detection
 
+## v1.1.0
+- Added BPM sync
+- Added block platforms
+- Improved placement logic
 
-# 1.2.2
-
-- Fixed jump indicators not being placed (again)
-- Fixed a bug where the player would hit black and spider rings late in robot
-- Fixed a bug where objects would not spawn when clicking with 'use player clicks' enabled
-- Fixed spider rings creating impossible sections when flying with 'use player clicks' enabled
-- Tweaked spike boundary generation:
-    - A spike margin of 0 now accurately reflects the tightest possible boundary
-    - Default spike margin set to 50
-
-
-# 1.2.1
-
-- Fixed missing jump indicators in cube/ball/robot/spider
-- Fixed orb spam when holding with 'use player clicks' enabled
-- Maybe fixed bad_alloc crash
-- Tweaked spike boundary generation:
-    - No upper spike boundary in cube/robot
-    - Places fewer spikes in spike columns
-    - Prevents the player from escaping the spike boundary with spider objects
-
-
-# 1.2.0
-
-- Improved ship and wave gameplay
-- Added setting for spike margin
-- Added settings for jump pad and ring generation
-- Added experimental gameplay objects
-- Fixed crash when placing jump indicators in cube/ball/robot/spider
-
-
-# 1.1.0
-
-- Added more settings
-- Implement Geode settings menu which saves across sessions
-- Updated button sprites
-- Enabled editor preview when placing speed portals
-- Fixed object spam when using a song offset
-
-
-# 1.0.4
-
-- Fixed an issue where too many objects would be placed at >60 FPS
-- The war on crashes continues
-
-
-# 1.0.3
-
-- Maybe fixed random crashes
-- Fixed some logic issues causing the player to die during generation
-
-
-# 1.0.2
-
-- Fixed display issue with BPM
-
-
-# 1.0.1
-
-- Tweaks to conform to Geode standards
-
-
-# 1.0.0
-
+## v1.0.0
 - Initial release
