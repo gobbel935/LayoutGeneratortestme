@@ -1,0 +1,304 @@
+{
+	"geode": "5.7.1",
+	"gd": {
+		"win": "2.2081",
+		"android": "2.2081",
+		"mac": "2.2081",
+		"ios": "2.2081"
+	},
+	"id": "profdragon.layoutgenerator",
+	"name": "Layout Generator",
+	"version": "v1.5.0",
+	"developer": "ProfDragon",
+	"description": "Procedurally generate Geometry Dash layouts",
+	"dependencies": {
+		"geode.node-ids": ">=v1.23.3"
+	},
+	"issues": {
+		"info": "Message me on Discord @professordragon, or sumbit an issue on GitHub.",
+		"url": "https://github.com/ProfessorDragon/LayoutGenerator/issues"
+	},
+	"links": {
+		"source": "https://github.com/ProfessorDragon/LayoutGenerator"
+	},
+	"resources": {
+		"spritesheets": {
+			"UISheet": [
+				"resources/*.png"
+			]
+		}
+	},
+	"settings": {
+		"title-general": {
+			"name": "General",
+			"type": "title"
+		},
+		"bpm": {
+			"name": "BPM",
+			"description": "Enter the song's BPM to make gameplay sync. No upper limit.",
+			"type": "float",
+			"default": 128.0,
+			"min": 0.01,
+			"control": {
+				"arrows": true,
+				"arrow-step": 1.0,
+				"slider": false
+			}
+		},
+		"use-player-clicks": {
+			"name": "Use player clicks",
+			"description": "If enabled, the gameplay will form around your clicks. If not, clicks will be inserted at random.",
+			"type": "bool",
+			"default": false
+		},
+		"title-generation": {
+			"name": "What to spawn",
+			"type": "title"
+		},
+		"objects": {
+			"name": "Objects",
+			"type": "custom:objects",
+			"default": [
+				10,
+				11,
+				12,
+				13,
+				35,
+				36,
+				47,
+				67,
+				84,
+				99,
+				101,
+				111,
+				140,
+				141,
+				200,
+				201,
+				202,
+				203,
+				660,
+				745,
+				1022,
+				1330,
+				1331,
+				1332,
+				1333,
+				1334,
+				1704,
+				1751,
+				1933,
+				3004,
+				3005
+			]
+		},
+		"spike-boundary-enabled": {
+			"name": "Spikes",
+			"type": "bool",
+			"default": true
+		},
+		"spike-margin": {
+			"name": "Spike margin",
+			"description": "Controls how close the spikes are to the player. Lower values make the gameplay less forgiving.",
+			"enable-if": "spike-boundary-enabled",
+			"type": "float",
+			"default": 50.0,
+			"min": 0.0,
+			"max": 150.0,
+			"control": {
+				"arrows": true,
+				"arrow-step": 10.0,
+				"slider": false
+			}
+		},
+		"jump-indicators": {
+			"name": "Jump indicators",
+			"type": "bool",
+			"default": true
+		},
+		"experimental-gameplay": {
+			"name": "Experimental gameplay",
+			"description": "Adds experimental gameplay elements such as late ring timings, jump pads while flying, and green gravity portals.",
+			"type": "bool",
+			"default": false
+		},
+		"camera-free-mode": {
+			"name": "Free camera (experimental)",
+			"description": "Enables free mode for gamemode portals.",
+			"type": "bool",
+			"default": false
+		},
+		"debug-trail": {
+			"name": "Debug trail",
+			"description": "Leaves an object trail behind the player while generating. An X indicates the jump button is pressed.",
+			"type": "bool",
+			"default": false
+		},
+		"title-weights": {
+			"name": "Weights",
+			"type": "title"
+		},
+		"weight-blocks": {
+			"name": "Block weight",
+			"description": "Spawn rate multiplier for blocks and platforms.",
+			"type": "float",
+			"default": 1.0,
+			"min": 0.0,
+			"max": 10.0,
+			"control": {
+				"arrows": true,
+				"arrow-step": 0.25,
+				"slider": true
+			}
+		},
+		"weight-pads": {
+			"name": "Pad weight",
+			"description": "Spawn rate multiplier for pads.",
+			"type": "float",
+			"default": 1.0,
+			"min": 0.0,
+			"max": 10.0,
+			"control": {
+				"arrows": true,
+				"arrow-step": 0.25,
+				"slider": true
+			}
+		},
+		"weight-rings": {
+			"name": "Ring weight",
+			"description": "Spawn rate multiplier for orbs/rings.",
+			"type": "float",
+			"default": 1.0,
+			"min": 0.0,
+			"max": 10.0,
+			"control": {
+				"arrows": true,
+				"arrow-step": 0.25,
+				"slider": true
+			}
+		},
+		"weight-portals": {
+			"name": "Portal weight",
+			"description": "Spawn rate multiplier for portals (gamemode, speed, size).",
+			"type": "float",
+			"default": 1.0,
+			"min": 0.0,
+			"max": 10.0,
+			"control": {
+				"arrows": true,
+				"arrow-step": 0.25,
+				"slider": true
+			}
+		},
+		"weight-beat-chance": {
+			"name": "Beat placement chance",
+			"description": "Probability of placing an object on a full beat. Default: 0.9375 (15/16).",
+			"type": "float",
+			"default": 0.9375,
+			"min": 0.0,
+			"max": 1.0,
+			"control": {
+				"arrows": true,
+				"arrow-step": 0.0625,
+				"slider": true
+			}
+		},
+		"weight-halfbeat-chance": {
+			"name": "Half-beat placement chance",
+			"description": "Probability of placing an object on a half-beat (grounded). Default: 0.75 (3/4).",
+			"type": "float",
+			"default": 0.75,
+			"min": 0.0,
+			"max": 1.0,
+			"control": {
+				"arrows": true,
+				"arrow-step": 0.0625,
+				"slider": true
+			}
+		},
+		"weight-tap-balance-init": {
+			"name": "Initial tap balance",
+			"description": "Starting value for the tap/no-tap balance. Positive = more jumps early on, negative = more falls early on. Default: 3.",
+			"type": "float",
+			"default": 3.0,
+			"min": -10.0,
+			"max": 10.0,
+			"control": {
+				"arrows": true,
+				"arrow-step": 0.5,
+				"slider": true
+			}
+		},
+		"title-developer": {
+			"name": "Developer",
+			"type": "title"
+		},
+		"dev-verbose-log": {
+			"name": "[DEV] Verbose logging",
+			"description": "Logs every fish placement with name, ID, position, and weight to the Geode console.",
+			"type": "bool",
+			"default": false
+		},
+		"dev-always-place": {
+			"name": "[DEV] Always place",
+			"description": "Bypasses beat/half-beat gating and canPlaceNextFrame — attempts to place an object every single frame.",
+			"type": "bool",
+			"default": false
+		},
+		"dev-disable-dedup": {
+			"name": "[DEV] Disable deduplication",
+			"description": "Skips the proximity check that prevents placing duplicate objects too close together.",
+			"type": "bool",
+			"default": false
+		},
+		"dev-disable-trail-check": {
+			"name": "[DEV] Disable trail interference check",
+			"description": "Skips the check that prevents objects from overlapping the player's recent trail.",
+			"type": "bool",
+			"default": false
+		},
+		"dev-freeze-generation": {
+			"name": "[DEV] Freeze generation",
+			"description": "Stops placing objects but keeps the playtest running. Trail is still recorded.",
+			"type": "bool",
+			"default": false
+		},
+		"dev-tap-balance-lock": {
+			"name": "[DEV] Lock tap balance",
+			"description": "Overrides the tap balance with a fixed value every frame, disabling dynamic adjustment.",
+			"type": "bool",
+			"default": false
+		},
+		"dev-tap-balance-locked": {
+			"name": "[DEV] Locked tap balance value",
+			"description": "The fixed value to use when tap balance lock is enabled.",
+			"enable-if": "dev-tap-balance-lock",
+			"type": "float",
+			"default": 0.0,
+			"min": -10.0,
+			"max": 10.0,
+			"control": {
+				"arrows": true,
+				"arrow-step": 0.5,
+				"slider": true
+			}
+		},
+		"dev-force-fish": {
+			"name": "[DEV] Force fish by name",
+			"description": "Always attempt to spawn a fish with this exact name (bypasses all state/tap/tag checks). Leave empty to disable. Examples: 'ground jump', 'block fall', 'yellow orb cube'.",
+			"type": "string",
+			"default": ""
+		},
+		"dev-bounds-debug": {
+			"name": "[DEV] Bounds debug markers",
+			"description": "Places visible markers at the floor and ceiling bounds every few frames.",
+			"type": "bool",
+			"default": false
+		}
+	},
+	"tags": [
+		"editor",
+		"utility",
+		"offline"
+	]
+}
