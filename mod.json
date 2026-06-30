@@ -514,11 +514,24 @@
 				"slider": true
 			}
 		},
-		"dev-fps-adaptive-timers": {
-			"name": "[DEV] FPS-adaptive timers",
-			"description": "Internal tap-delay and place-again timers are tuned in frame counts assuming 60 FPS. At higher display refresh rates this makes them resolve faster in real time. Enabling this converts those frame counts into an equivalent real-time duration for your actual current frame rate, keeping behavior consistent across 60/144/240Hz etc.",
+		"dev-tps-adaptive-timers": {
+			"name": "[DEV] TPS-adaptive timers",
+			"description": "Internal tap-delay and place-again timers are hardcoded as tick counts. This layer's update() runs once per RENDERED frame (display FPS), but the player physics simulate on a separate, decoupled tick rate (TPS) that can be higher or lower than your display FPS, including past 240 TPS. Enabling this measures your actual current physics tick rate (via how many physics ticks land in each render frame) and rescales the timers against it, instead of against display FPS.",
 			"type": "bool",
 			"default": false
+		},
+		"dev-tps-reference": {
+			"name": "[DEV] TPS-adaptive reference rate",
+			"description": "The physics tick rate the hardcoded tick counts are assumed to be tuned against. 240 is GD's classic default TPS -- adjust this if you determine the original timing assumed something else.",
+			"enable-if": "dev-tps-adaptive-timers",
+			"type": "float",
+			"default": 240.0,
+			"min": 1.0,
+			"control": {
+				"arrows": true,
+				"arrow-step": 10.0,
+				"slider": false
+			}
 		}
 	},
 	"tags": [

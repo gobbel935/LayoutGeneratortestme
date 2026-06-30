@@ -19,7 +19,7 @@
   - `[DEV] Bounds debug markers` — places visible markers at the floor and ceiling bounds every 10 frames.
   - `[DEV] Frame-perfect spikes` — strips the hardcoded ~8x14 anti-grazing buffer that was previously applied to spike placement regardless of the Spike Margin setting, so Spike Margin = 0 can now mean an actual zero-buffer, frame-perfect gap.
   - `[DEV] Spike hitbox width/height override` — lets you dial the buffer below the previous hardcoded 8/14 instead of just removing it outright, for precise tuning down toward 0.
-  - `[DEV] FPS-adaptive timers` — internal tap-delay/place-again timers were tuned in raw frame counts assuming 60 FPS, so they resolved faster in real time at higher refresh rates. This setting converts those frame counts into the equivalent duration for your actual current frame rate.
+  - `[DEV] TPS-adaptive timers` (+ `[DEV] TPS-adaptive reference rate`) — internal tick timers are rescaled against your actual measured physics tick rate (TPS), not display FPS. The two are decoupled: `LayoutGeneratorLayer::update()` runs once per rendered frame, while the player's physics tick separately and can run faster or slower than your display refresh rate, including past 240 TPS. This is measured directly from how many physics ticks land in `m_queuedTrail` per render frame, so it works at any TPS with no upper bound.
 - **Fixes**:
   - Fish ID counter (`m_fishId`) is now reset to 0 on each new build start.
   - `createObject` return value is now null-checked before use in `placeFish`.

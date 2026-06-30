@@ -90,16 +90,30 @@ void LayoutGeneratorLayer::update(float dt)
     }
     pd->velScaled = CCPoint{pd->velUnscaled.x * 60.f * dt, pd->velUnscaled.y * 60.f * dt};
 
-    // dev: fps-adaptive timers — internal "frame count" timers (tap delays, place-again windows)
-    // were originally tuned assuming 60fps. at higher display refresh rates dt shrinks, so a fixed
-    // frame count becomes a shorter real-world duration. this converts a 60fps-reference frame
-    // count into an equivalent frame count for the current dt, keeping real-time behavior consistent.
-    const bool fpsAdaptive = mod->getSettingValue<bool>("dev-fps-adaptive-timers");
-    auto framesFor60 = [&](int frames60) -> int
+    // dev: tps-adaptive timers — LayoutGeneratorLayer::update() is a generic Cocos2d schedule that
+    // fires once per RENDERED frame (display FPS), but the player's actual physics simulate on a
+    // separate, decoupled tick rate (TPS) via PlayerObject::updateJump, which can run multiple times
+    // per render frame (high TPS / low FPS) or be skipped some frames (low TPS / high FPS). every
+    // real physics tick already gets queued into m_queuedTrail by the updateJump hook below, so the
+    // number of queued entries THIS frame is exactly how many physics ticks happened since we last
+    // ran — that's the true tick rate, independent of display refresh rate, with no upper bound
+    // (handles >240 TPS the same as any other value, since this just measures real elapsed ticks).
+    const size_t ticksThisFrame = pd->player->m_fields->m_queuedTrail.size();
+    const float tickDt = ticksThisFrame > 0 ? dt / (float)ticksThisFrame : dt;
+
+    // internal "tick count" timers (tap delays, place-again windows) were originally authored as
+    // hardcoded tick counts against some assumed reference physics rate (240 TPS being GD's classic
+    // default, but this is exposed as a setting rather than hardcoded since the true original
+    // reference isn't something we can verify with certainty). this rescales a tick count tuned at
+    // that reference rate into an equivalent tick count for the player's actual current tick rate,
+    // keeping real-time behavior consistent whether you're running 60, 240, or 1000+ TPS.
+    const bool tpsAdaptive = mod->getSettingValue<bool>("dev-tps-adaptive-timers");
+    const float tpsReference = mod->getSettingValue<float>("dev-tps-reference");
+    auto ticksForReference = [&](int referenceTicks) -> int
     {
-        if (!fpsAdaptive || dt <= 0.f)
-            return frames60;
-        return std::max(1, (int)std::round((frames60 / 60.f) / dt));
+        if (!tpsAdaptive || tickDt <= 0.f || tpsReference <= 0.f)
+            return referenceTicks;
+        return std::max(1, (int)std::round((referenceTicks / tpsReference) / tickDt));
     };
 
     // paused
@@ -318,7 +332,7 @@ void LayoutGeneratorLayer::update(float dt)
             {
                 m_tapBalance += 1.f;
                 m_shouldTap = PoolTap::TAP;
-                m_shouldTapTimer = framesFor60(3);
+                m_shouldTapTimer = ticksForReference(3);
             }
             else if (fish->tap & (PoolTap::HOLD | PoolTap::HOLD_RANDOM | PoolTap::RANDOM))
             {
@@ -334,7 +348,7 @@ void LayoutGeneratorLayer::update(float dt)
 
                 if (utils::random::chance(0.5))
                 {
-                    m_placeAgainTimer = framesFor60(2);
+                    m_placeAgainTimer = ticksForReference(2);
 
                     if (pd->state & PoolState::GROUNDED)
                     {
@@ -350,7 +364,7 @@ void LayoutGeneratorLayer::update(float dt)
 
             if (fish->tags & PoolTag::SPIDER && utils::random::chance(0.5))
             {
-                m_placeAgainTimer = framesFor60(2);
+                m_placeAgainTimer = ticksForReference(2);
             }
 
             if (useRandomClicks && fish->tap & PoolTap::TAP_OR_HOLD && pd->isClicking())
@@ -501,7 +515,7 @@ void LayoutGeneratorLayer::update(float dt)
         {
             if (utils::random::chance(0.5))
             {
-                m_shouldTapTimer = utils::random::generate<int>(framesFor60(2), framesFor60(6));
+                m_shouldTapTimer = utils::random::generate<int>(ticksForReference(2), ticksForReference(6));
                 if (pd->isClicking())
                     pd->player->releaseButton(PlayerButton::Jump);
                 else
@@ -514,7 +528,7 @@ void LayoutGeneratorLayer::update(float dt)
             if (pd->state & PoolState::GAMEMODE_SHIP)
                 mid -= pd->velScaled.y * 10.f;
             else if (pd->state & PoolState::GAMEMODE_WAVE)
-                m_shouldTapTimer = framesFor60(3);
+                m_shouldTapTimer = ticksForReference(3);
 
             bool push = pd->pos.y * pd->getSign() < mid * pd->getSign();
 
@@ -542,7 +556,7 @@ void LayoutGeneratorLayer::update(float dt)
                         if (m_shouldTap == PoolTap::HOLD_RANDOM)
                             m_shouldTapTimer = (int)(utils::random::generate<float>(.03f, .33f) / dt);
                         else
-                            m_shouldTapTimer = framesFor60(3);
+                            m_shouldTapTimer = ticksForReference(3);
                     }
                     m_shouldTap = PoolTap::NO;
                 }
