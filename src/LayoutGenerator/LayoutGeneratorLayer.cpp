@@ -90,6 +90,18 @@ void LayoutGeneratorLayer::update(float dt)
     }
     pd->velScaled = CCPoint{pd->velUnscaled.x * 60.f * dt, pd->velUnscaled.y * 60.f * dt};
 
+    // dev: fps-adaptive timers — internal "frame count" timers (tap delays, place-again windows)
+    // were originally tuned assuming 60fps. at higher display refresh rates dt shrinks, so a fixed
+    // frame count becomes a shorter real-world duration. this converts a 60fps-reference frame
+    // count into an equivalent frame count for the current dt, keeping real-time behavior consistent.
+    const bool fpsAdaptive = mod->getSettingValue<bool>("dev-fps-adaptive-timers");
+    auto framesFor60 = [&](int frames60) -> int
+    {
+        if (!fpsAdaptive || dt <= 0.f)
+            return frames60;
+        return std::max(1, (int)std::round((frames60 / 60.f) / dt));
+    };
+
     // paused
     if (m_playerPosPauseCheck == pd->pos)
         return;
@@ -306,7 +318,7 @@ void LayoutGeneratorLayer::update(float dt)
             {
                 m_tapBalance += 1.f;
                 m_shouldTap = PoolTap::TAP;
-                m_shouldTapTimer = 3;
+                m_shouldTapTimer = framesFor60(3);
             }
             else if (fish->tap & (PoolTap::HOLD | PoolTap::HOLD_RANDOM | PoolTap::RANDOM))
             {
@@ -322,7 +334,7 @@ void LayoutGeneratorLayer::update(float dt)
 
                 if (utils::random::chance(0.5))
                 {
-                    m_placeAgainTimer = 2;
+                    m_placeAgainTimer = framesFor60(2);
 
                     if (pd->state & PoolState::GROUNDED)
                     {
@@ -338,7 +350,7 @@ void LayoutGeneratorLayer::update(float dt)
 
             if (fish->tags & PoolTag::SPIDER && utils::random::chance(0.5))
             {
-                m_placeAgainTimer = 2;
+                m_placeAgainTimer = framesFor60(2);
             }
 
             if (useRandomClicks && fish->tap & PoolTap::TAP_OR_HOLD && pd->isClicking())
@@ -373,7 +385,16 @@ void LayoutGeneratorLayer::update(float dt)
         const float spikeMargin = mod->getSettingValue<float>("spike-margin");
         const CCSize playerSize = pd->getRectSize();
 
-        const CCSize spikeSize{8.f + spikeMargin / 2.f, 14.f};
+        // the spike hitbox buffer is hardcoded to (8, 14) by default because the visible spike
+        // sprite is noticeably larger than its real collision hitbox, and grazing the side still
+        // kills you. dev-frame-perfect-spikes lets you override this buffer for testing, so
+        // spike-margin = 0 can mean an actual frame-perfect (or even intentionally too-tight) gap
+        // instead of always keeping this safety cushion.
+        const bool framePerfectSpikes = mod->getSettingValue<bool>("dev-frame-perfect-spikes");
+        const float spikeHitboxWidth = framePerfectSpikes ? mod->getSettingValue<float>("dev-spike-hitbox-width") : 8.f;
+        const float spikeHitboxHeight = framePerfectSpikes ? mod->getSettingValue<float>("dev-spike-hitbox-height") : 14.f;
+
+        const CCSize spikeSize{spikeHitboxWidth + spikeMargin / 2.f, spikeHitboxHeight};
 
         const float spikeScanRight = pd->pos.x - (30.f - playerSize.width) / 2.f;
 
@@ -480,7 +501,7 @@ void LayoutGeneratorLayer::update(float dt)
         {
             if (utils::random::chance(0.5))
             {
-                m_shouldTapTimer = utils::random::generate<int>(2, 6);
+                m_shouldTapTimer = utils::random::generate<int>(framesFor60(2), framesFor60(6));
                 if (pd->isClicking())
                     pd->player->releaseButton(PlayerButton::Jump);
                 else
@@ -493,7 +514,7 @@ void LayoutGeneratorLayer::update(float dt)
             if (pd->state & PoolState::GAMEMODE_SHIP)
                 mid -= pd->velScaled.y * 10.f;
             else if (pd->state & PoolState::GAMEMODE_WAVE)
-                m_shouldTapTimer = 3;
+                m_shouldTapTimer = framesFor60(3);
 
             bool push = pd->pos.y * pd->getSign() < mid * pd->getSign();
 
@@ -521,7 +542,7 @@ void LayoutGeneratorLayer::update(float dt)
                         if (m_shouldTap == PoolTap::HOLD_RANDOM)
                             m_shouldTapTimer = (int)(utils::random::generate<float>(.03f, .33f) / dt);
                         else
-                            m_shouldTapTimer = 3;
+                            m_shouldTapTimer = framesFor60(3);
                     }
                     m_shouldTap = PoolTap::NO;
                 }

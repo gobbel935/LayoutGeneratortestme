@@ -99,7 +99,7 @@
 		},
 		"spike-margin": {
 			"name": "Spike margin",
-			"description": "Controls how close the spikes are to the player. Lower values make the gameplay less forgiving.",
+			"description": "Controls how close the spikes are to the player. Lower values make the gameplay less forgiving. See Developer settings for true frame-perfect (0-buffer) spacing.",
 			"enable-if": "spike-boundary-enabled",
 			"type": "float",
 			"default": 50.0,
@@ -107,7 +107,7 @@
 			"max": 150.0,
 			"control": {
 				"arrows": true,
-				"arrow-step": 10.0,
+				"arrow-step": 1.0,
 				"slider": false
 			}
 		},
@@ -477,6 +477,46 @@
 		"dev-bounds-debug": {
 			"name": "[DEV] Bounds debug markers",
 			"description": "Places visible markers at the floor and ceiling bounds every few frames.",
+			"type": "bool",
+			"default": false
+		},
+		"dev-frame-perfect-spikes": {
+			"name": "[DEV] Frame-perfect spikes",
+			"description": "Removes the built-in anti-grazing safety buffer baked into spike placement (normally ~8x14 units regardless of Spike Margin). With this on, Spike Margin = 0 gives a true, razor-thin frame-perfect gap. Testing only -- this makes gameplay unforgivingly tight and easy to die to grazes.",
+			"type": "bool",
+			"default": false
+		},
+		"dev-spike-hitbox-width": {
+			"name": "[DEV] Spike hitbox width override",
+			"description": "Replaces the default 8.0 unit horizontal safety buffer used in frame-perfect mode. Lower = tighter horizontal spacing.",
+			"enable-if": "dev-frame-perfect-spikes",
+			"type": "float",
+			"default": 8.0,
+			"min": 0.0,
+			"max": 20.0,
+			"control": {
+				"arrows": true,
+				"arrow-step": 0.5,
+				"slider": true
+			}
+		},
+		"dev-spike-hitbox-height": {
+			"name": "[DEV] Spike hitbox height override",
+			"description": "Replaces the default 14.0 unit vertical safety buffer used in frame-perfect mode. Lower = tighter vertical spacing.",
+			"enable-if": "dev-frame-perfect-spikes",
+			"type": "float",
+			"default": 14.0,
+			"min": 0.0,
+			"max": 20.0,
+			"control": {
+				"arrows": true,
+				"arrow-step": 0.5,
+				"slider": true
+			}
+		},
+		"dev-fps-adaptive-timers": {
+			"name": "[DEV] FPS-adaptive timers",
+			"description": "Internal tap-delay and place-again timers are tuned in frame counts assuming 60 FPS. At higher display refresh rates this makes them resolve faster in real time. Enabling this converts those frame counts into an equivalent real-time duration for your actual current frame rate, keeping behavior consistent across 60/144/240Hz etc.",
 			"type": "bool",
 			"default": false
 		}
